@@ -76,7 +76,7 @@ typedef struct {
 } KeypadSize;
 
 #define LIST_MAX 10		// Max number of keys on the active list.
-#define MAPSIZE 10		// MAPSIZE is the number of rows (times 16 columns)
+#define MAPSIZE 8		// MAPSIZE is the number of rows (times 16 columns)
 #define makeKeymap(x) ((char*)x)
 
 
@@ -84,7 +84,7 @@ typedef struct {
 class Keypad : public Key {
 public:
 
-	Keypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCols);
+	Keypad(char *userKeymap, byte pin_si, byte pin_so, byte pin_rck, byte pin_sck, byte numRows, byte numCols=8);
 
 	virtual void pin_mode(byte pinNum, byte mode) { pinMode(pinNum, mode); }
 	virtual void pin_write(byte pinNum, boolean level) { digitalWrite(pinNum, level); }
@@ -113,8 +113,7 @@ public:
 private:
 	unsigned long startTime;
 	char *keymap;
-    byte *rowPins;
-    byte *columnPins;
+	byte skey_si, skey_so, skey_rck, skey_sck;
 	KeypadSize sizeKpd;
 	uint debounceTime;
 	uint holdTime;

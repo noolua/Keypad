@@ -32,9 +32,11 @@
 #include "Keypad.h"
 
 // <<constructor>> Allows custom keymap, pin configuration, and keypad sizes.
-Keypad::Keypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCols) {
-	rowPins = row;
-	columnPins = col;
+Keypad::Keypad(char *userKeymap, byte pin_si, byte pin_so, byte pin_rck, byte pin_sck, byte numRows, byte numCols){
+  skey_si = pin_si;
+  skey_so = pin_so;
+  skey_rck = pin_rck;
+  skey_sck = pin_sck;
 	sizeKpd.rows = numRows;
 	sizeKpd.columns = numCols;
 
@@ -51,7 +53,11 @@ Keypad::Keypad(char *userKeymap, byte *row, byte *col, byte numRows, byte numCol
 
 // Let the user define a keymap - assume the same row/column count as defined in constructor
 void Keypad::begin(char *userKeymap) {
-    keymap = userKeymap;
+  keymap = userKeymap;
+  pin_mode(skey_so, OUTPUT);
+  pin_mode(skey_rck, OUTPUT);
+  pin_mode(skey_sck, OUTPUT);
+  pin_mode(skey_si, INPUT);
 }
 
 // Returns a single key only. Retained for backwards compatibility.
@@ -82,25 +88,33 @@ bool Keypad::getKeys() {
 
 // Private : Hardware scan
 void Keypad::scanKeys() {
-	// Re-intialize the row pins. Allows sharing these pins with other hardware.
-	for (byte r=0; r<sizeKpd.rows; r++) {
-		pin_mode(rowPins[r],INPUT_PULLUP);
-	}
+  byte row_mask = 0, col_mask = 0, bit_value = 0;
 
-	// bitMap stores ALL the keys that are being pressed.
-	for (byte c=0; c<sizeKpd.columns; c++) {
-		pin_mode(columnPins[c],OUTPUT);
-		pin_write(columnPins[c], LOW);	// Begin column pulse output.
-		if(scanTime > 0) {
-			delay(scanTime);  // DO NOT REMOVE! Prevents problems with the Joyjoz music mat hack; https://github.com/Nullkraft/Keypad/pull/15
-		}
-		for (byte r=0; r<sizeKpd.rows; r++) {
-			bitWrite(bitMap[r], c, !pin_read(rowPins[r]));  // keypress is active low so invert to high.
-		}
-		// Set pin to high impedance input. Effectively ends column pulse.
-		pin_write(columnPins[c],HIGH);
-		pin_mode(columnPins[c],INPUT);
-	}
+  for (int row_idx = 0; row_idx < sizeKpd.rows; row_idx++){
+    // Which row active
+		row_mask = 1 << (7 - row_idx);
+		// Activate the current row using 74HC595D.
+    pin_write(skey_rck, LOW);
+    for(int i=0; i<8; i++){
+      pin_write(skey_so, row_mask & 0x1);
+      pin_write(skey_sck, HIGH);
+      pin_write(skey_sck, LOW);
+      row_mask = row_mask >> 1;
+    }
+    pin_write(skey_rck, HIGH);
+
+		// Retrieve the column statuses of the current row from the 74HC165D
+    pin_write(skey_rck, LOW);
+    pin_write(skey_rck, HIGH);
+    for(int c=7; c>=0; c--){
+      bit_value = pin_read(skey_si) & 0x1;
+      if(c < sizeKpd.columns){
+        bitWrite(bitMap[row_idx], c, bit_value);
+      }
+      pin_write(skey_sck, HIGH);
+      pin_write(skey_sck, LOW);
+    }
+  }
 }
 
 // Private
